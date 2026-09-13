@@ -213,20 +213,23 @@ def cmd_start(args, config: AgentConfig) -> int:
     return 0
 
 def main() -> int:
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser.add_argument("-c", "--config", help="Path to custom agent.conf configuration file", default=None)
+
     parser = argparse.ArgumentParser(
         prog="aisoc-agent",
+        parents=[parent_parser],
         description="AI-SOC Lightweight Linux Endpoint Agent for Security Telemetry Collection and Secure Transport."
     )
-    parser.add_argument("-c", "--config", help="Path to custom agent.conf configuration file", default=None)
 
     subparsers = parser.add_subparsers(dest="command", help="Agent commands")
 
-    subparsers.add_parser("start", help="Start the aisoc-agent daemon and collectors")
-    subparsers.add_parser("register", help="Register or re-enroll this agent with Central SOC")
-    subparsers.add_parser("status", help="Show local agent operational status and spool backlog")
-    subparsers.add_parser("test", help="Run end-to-end diagnostic and connectivity tests")
-    subparsers.add_parser("version", help="Display agent version")
-    subparsers.add_parser("config-check", help="Validate configuration files and filesystem permissions")
+    subparsers.add_parser("start", parents=[parent_parser], help="Start the aisoc-agent daemon and collectors")
+    subparsers.add_parser("register", parents=[parent_parser], help="Register or re-enroll this agent with Central SOC")
+    subparsers.add_parser("status", parents=[parent_parser], help="Show local agent operational status and spool backlog")
+    subparsers.add_parser("test", parents=[parent_parser], help="Run end-to-end diagnostic and connectivity tests")
+    subparsers.add_parser("version", parents=[parent_parser], help="Display agent version")
+    subparsers.add_parser("config-check", parents=[parent_parser], help="Validate configuration files and filesystem permissions")
 
     args = parser.parse_args()
 

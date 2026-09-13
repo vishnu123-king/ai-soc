@@ -1,0 +1,2 @@
+# httpx is required for HTTP/HTTPS transport with Central AI-SOC Platform
+httpx>=0.25.0

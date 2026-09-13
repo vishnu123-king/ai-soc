@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  aisoc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aisoc-platform
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - FASTAPI_PORT=8088
+      - HOST=0.0.0.0
+      - DATABASE_URL=sqlite:////app/data/aisoc.db
+      - AI_PROVIDER=gemini
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-secret-in-production-random-32-chars}
+      - AGENT_ENROLLMENT_KEY=${AGENT_ENROLLMENT_KEY:-aisoc-agent-enrollment-secret-key}
+    volumes:
+      - aisoc_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  aisoc_data:
+    name: aisoc_database_volume

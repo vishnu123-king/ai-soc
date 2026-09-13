@@ -1,0 +1,8 @@
+{
+  "name": "Remix AI-SOC: Security Incident Detection \u0026 Analysis",
+  "description": "A hybrid rule-based and LLM framework for automated security incident detection, correlation, risk scoring, MITRE ATT\u0026CK mapping, and incident analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

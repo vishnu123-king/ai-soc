@@ -1,0 +1,50 @@
+# ==============================================================================
+# AI-SOC Linux Endpoint Agent Configuration (agent.conf)
+# Location: /etc/aisoc/agent.conf
+# Permissions: 0600 (owner root/aisoc)
+# ==============================================================================
+
+# Central AI-SOC Platform URL (HTTPS in production, HTTP for local testing)
+CENTRAL_SOC_URL=https://soc.example.internal
+
+# Unique identifier for this host (defaults to system hostname if blank)
+AGENT_ID=
+
+# Authentication Bearer Token (auto-populated by 'aisoc-agent register')
+# Can also be saved separately in /var/lib/aisoc/token (mode 0600)
+AGENT_TOKEN=
+
+# Agent Version
+AGENT_VERSION=1.0.0
+
+# Heartbeat keep-alive transmission interval (seconds)
+HEARTBEAT_INTERVAL=30
+
+# Maximum number of normalized events to batch in a single HTTP payload
+BATCH_SIZE=50
+
+# Maximum interval (seconds) between batch transmissions
+BATCH_INTERVAL=5.0
+
+# HTTP Request timeout (seconds)
+REQUEST_TIMEOUT=10.0
+
+# TLS Certificate Verification (true/false).
+# WARNING: Setting to false disables certificate validation; only for lab testing!
+VERIFY_TLS=true
+
+# Path to custom corporate root CA bundle (optional)
+CA_CERT=
+
+# Local persistent SQLite spool directory for offline buffering
+BUFFER_DIRECTORY=/var/lib/aisoc/buffer
+
+# Location for persisted authentication token
+TOKEN_PATH=/var/lib/aisoc/token
+
+# Logging Level (DEBUG, INFO, WARNING, ERROR)
+LOG_LEVEL=INFO
+
+# Telemetry Log File Sources
+AUTH_LOG_PATH=/var/log/auth.log
+AUDIT_LOG_PATH=/var/log/audit/audit.log

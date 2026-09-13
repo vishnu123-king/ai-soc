@@ -89,10 +89,17 @@ The project includes an automated end-to-end cyber intrusion scenario:
 
 ---
 
-## 6. Getting Started & Development
+## 6. Getting Started & Deployment
 
-### 1. Environment Setup
-Copy the example environment file:
+### One-Step Complete Installation Script
+To install the entire platform, dependencies, systemd services, and the Linux endpoint agent with a single command:
+```bash
+chmod +x install.sh
+sudo ./install.sh
+```
+
+### Manual Environment Setup
+Alternatively, configure manually:
 ```bash
 cp .env.example .env
 ```

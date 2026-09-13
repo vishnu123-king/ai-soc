@@ -68,12 +68,13 @@ INSTALL_DIR="/opt/aisoc-agent"
 mkdir -p "$INSTALL_DIR"
 cp -r "$(dirname "$0")/aisoc_agent" "$INSTALL_DIR/"
 
-# Create executable wrapper in /usr/local/bin
+# Create executable wrapper in /usr/local/bin and /usr/bin for secure_path compatibility
 cat << 'EOF' > /usr/local/bin/aisoc-agent
 #!/usr/bin/env bash
 PYTHONPATH=/opt/aisoc-agent exec python3 -m aisoc_agent.main "$@"
 EOF
 chmod 755 /usr/local/bin/aisoc-agent
+ln -sf /usr/local/bin/aisoc-agent /usr/bin/aisoc-agent
 
 # 7. Create Default Configuration if not present
 if [[ ! -f /etc/aisoc/agent.conf ]]; then

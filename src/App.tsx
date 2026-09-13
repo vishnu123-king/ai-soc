@@ -47,6 +47,12 @@ export default function App() {
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(() => {
+      fetchStats().then(setStats).catch(() => {});
+      fetchIncidents().then(setIncidents).catch(() => {});
+      fetchLogs(80).then(setLogs).catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
   }, [loadData]);
 
   // WebSocket Live Security Telemetry Connection
@@ -71,7 +77,7 @@ export default function App() {
           const msgType = payload.type;
           const data = payload.data;
 
-          if (msgType === 'NEW_LOG') {
+          if (msgType === 'NEW_LOG' || msgType === 'EVENT_INGESTED') {
             setLogs((prev) => [
               {
                 id: data.id,
@@ -80,27 +86,39 @@ export default function App() {
                 event_type: data.event_type,
                 status: data.status,
                 source_ip: data.source_ip,
-                raw_message: `${data.event_type} on ${data.hostname} (${data.status})`,
+                username: data.username,
+                raw_message: data.raw_message || `${data.event_type} on ${data.hostname} (${data.status})`,
               },
-              ...prev.slice(0, 100),
+              ...prev.filter((l) => l.id !== data.id).slice(0, 100),
             ]);
-          } else if (msgType === 'NEW_ALERT') {
+            fetchStats().then(setStats).catch(() => {});
+          } else if (msgType === 'NEW_ALERT' || msgType === 'DETECTION_TRIGGERED') {
             setToastMessage({
-              title: `Security Alert: ${data.rule_name}`,
-              desc: `${data.description} on ${data.hostname}`,
+              title: `Security Alert: ${data.rule_name || data.title}`,
+              desc: `${data.description || data.title} on ${data.hostname}`,
               type: 'alert',
             });
-            // Refresh stats
             fetchStats().then(setStats).catch(() => {});
+            fetchIncidents().then(setIncidents).catch(() => {});
           } else if (msgType === 'INCIDENT_UPDATED') {
             fetchIncidents().then(setIncidents).catch(() => {});
             fetchStats().then(setStats).catch(() => {});
+            if (selectedIncident && (selectedIncident.id === data.id || selectedIncident.id === data.incident_id)) {
+              const targetId = data.id || data.incident_id;
+              fetchIncidentDetail(targetId).then(setSelectedIncident).catch(() => {});
+            }
           } else if (msgType === 'AI_ANALYSIS_COMPLETED') {
             fetchIncidents().then(setIncidents).catch(() => {});
             if (selectedIncident && selectedIncident.id === data.incident_id) {
               fetchIncidentDetail(data.incident_id).then(setSelectedIncident).catch(() => {});
             }
-          } else if (msgType === 'SEED_COMPLETED' || msgType === 'DATABASE_RESET') {
+          } else if (
+            msgType === 'SEED_COMPLETED' ||
+            msgType === 'SIMULATION_COMPLETED' ||
+            msgType === 'DATABASE_RESET' ||
+            msgType === 'AGENT_REGISTERED' ||
+            msgType === 'AGENT_HEARTBEAT'
+          ) {
             loadData();
           }
         } catch (e) {

@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from typing import Optional, Dict, Any
 
 from backend.app.database.connection import get_db
 from backend.app.api.dashboard import get_dashboard_summary, get_dashboard_timeline
-from backend.app.api.events import list_events
+from backend.app.api.events import list_events, _process_single_event
 from backend.app.api.simulation import run_attack_simulation, SimulationRunRequest
 from backend.app.models.event import Event
 from backend.app.models.detection import Detection
 from backend.app.models.incident import Incident
 from backend.app.models.ai_analysis import AIAnalysis
+from backend.app.schemas.event import EventCreate
 from backend.app.websocket_manager import ws_manager
 
 router = APIRouter()
@@ -45,10 +47,10 @@ def compat_stats(db: Session = Depends(get_db)):
                 "rule_id": d.rule_id,
                 "rule_name": d.title,
                 "severity": d.severity,
-                "timestamp": d.timestamp.isoformat(),
+                "timestamp": d.timestamp.isoformat() if hasattr(d.timestamp, 'isoformat') else str(d.timestamp),
                 "hostname": d.hostname,
                 "description": d.description,
-                "evidence": d.evidence or [],
+                "evidence": [f"Event #{eid}" for eid in (d.evidence_event_ids or [])],
                 "mitre_technique_id": d.mitre_technique_id,
                 "mitre_technique_name": d.mitre_technique_name,
                 "incident_id": d.incident_id
@@ -58,12 +60,12 @@ def compat_stats(db: Session = Depends(get_db)):
     }
 
 @router.get("/logs")
-def compat_logs(limit: int = 100, db: Session = Depends(get_db)):
-    events = list_events(limit=limit, offset=0, db=db)
+def compat_logs(limit: int = 100, event_type: Optional[str] = None, db: Session = Depends(get_db)):
+    events = list_events(limit=limit, offset=0, event_type=event_type, db=db)
     return [
         {
             "id": e.id,
-            "timestamp": e.timestamp.isoformat(),
+            "timestamp": e.timestamp.isoformat() if hasattr(e.timestamp, 'isoformat') else str(e.timestamp),
             "hostname": e.hostname,
             "source_ip": e.source_ip,
             "destination_ip": e.destination_ip,
@@ -79,11 +81,30 @@ def compat_logs(limit: int = 100, db: Session = Depends(get_db)):
         for e in events
     ]
 
+@router.post("/logs")
+async def compat_ingest_log(payload: Dict[str, Any], db: Session = Depends(get_db)):
+    ev_create = EventCreate(
+        agent_id=payload.get("agent_id", "web-console"),
+        hostname=payload.get("hostname", "prod-db-01.corp.internal"),
+        event_type=payload.get("event_type", "generic"),
+        action=payload.get("action", "event"),
+        status=payload.get("status", "info"),
+        source_ip=payload.get("source_ip"),
+        destination_ip=payload.get("destination_ip"),
+        username=payload.get("username"),
+        process=payload.get("process"),
+        command=payload.get("command"),
+        raw_message=payload.get("raw_message"),
+        metadata=payload.get("metadata", {})
+    )
+    saved = await _process_single_event(ev_create, db)
+    return {"status": "ingested", "id": saved.id, "event": saved}
+
 @router.post("/seed")
 async def compat_seed(db: Session = Depends(get_db)):
-    req = SimulationRunRequest(scenario="ssh_brute_force")
+    req = SimulationRunRequest(scenario="full_kill_chain", hostname="srv-linux-prod-01", agent_id="srv-linux-prod-01")
     res = await run_attack_simulation(req, db)
-    await ws_manager.broadcast("SEED_COMPLETED", {"scenario": "ssh_brute_force"})
+    await ws_manager.broadcast("SEED_COMPLETED", {"scenario": "full_kill_chain"})
     return res
 
 @router.post("/reset")

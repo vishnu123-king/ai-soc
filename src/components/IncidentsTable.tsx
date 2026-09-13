@@ -18,18 +18,31 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
   const filtered = incidents.filter((inc) => {
+    const host = (inc.affected_host || (inc as any).hostname || '').toLowerCase();
+    const title = (inc.title || '').toLowerCase();
+    const srcIp = (inc.source_ip || '').toLowerCase();
+    const searchLower = search.toLowerCase();
     const matchesSearch =
-      inc.title.toLowerCase().includes(search.toLowerCase()) ||
-      inc.affected_host.toLowerCase().includes(search.toLowerCase()) ||
-      (inc.source_ip && inc.source_ip.toLowerCase().includes(search.toLowerCase()));
+      !search || title.includes(searchLower) || host.includes(searchLower) || srcIp.includes(searchLower);
 
     const matchesSeverity = severityFilter === 'ALL' || inc.severity === severityFilter;
-    const matchesStatus = statusFilter === 'ALL' || inc.status === statusFilter;
+    
+    let matchesStatus = true;
+    if (statusFilter !== 'ALL') {
+      const incStatus = (inc.status || '').toUpperCase();
+      if (statusFilter === 'OPEN') {
+        matchesStatus = incStatus === 'OPEN' || incStatus === 'NEW';
+      } else if (statusFilter === 'CLOSED') {
+        matchesStatus = incStatus === 'CLOSED' || incStatus === 'RESOLVED' || incStatus === 'FALSE_POSITIVE';
+      } else {
+        matchesStatus = incStatus === statusFilter;
+      }
+    }
 
     return matchesSearch && matchesSeverity && matchesStatus;
   });
 
-  const severityBadgeClass = (sev: Severity) => {
+  const severityBadgeClass = (sev: string) => {
     switch (sev) {
       case 'CRITICAL':
         return 'bg-rose-500/20 text-rose-300 border-rose-500/40';
@@ -44,15 +57,19 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
     }
   };
 
-  const statusBadgeClass = (status: IncidentStatus) => {
+  const statusBadgeClass = (status: string) => {
     switch (status) {
       case 'OPEN':
+      case 'NEW':
         return 'bg-rose-950/60 text-rose-400 border-rose-800/60';
       case 'INVESTIGATING':
         return 'bg-amber-950/60 text-amber-400 border-amber-800/60';
       case 'CONTAINED':
         return 'bg-blue-950/60 text-blue-400 border-blue-800/60';
       case 'CLOSED':
+      case 'RESOLVED':
+      case 'FALSE_POSITIVE':
+      default:
         return 'bg-slate-800 text-slate-400 border-slate-700';
     }
   };

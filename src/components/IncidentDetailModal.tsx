@@ -147,7 +147,7 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({
                   <div className="flex items-center gap-1 text-slate-400 mb-1">
                     <Laptop className="w-3.5 h-3.5" /> Affected Host
                   </div>
-                  <span className="font-mono font-medium text-slate-200">{incident.affected_host}</span>
+                  <span className="font-mono font-medium text-slate-200">{incident.affected_host || (incident as any).hostname || 'N/A'}</span>
                 </div>
                 <div>
                   <div className="flex items-center gap-1 text-slate-400 mb-1">
@@ -167,20 +167,26 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({
               <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
                 <span className="text-xs text-slate-400">Incident Triage Status:</span>
                 <div className="flex items-center gap-1">
-                  {(['OPEN', 'INVESTIGATING', 'CONTAINED', 'CLOSED'] as IncidentStatus[]).map((st) => (
-                    <button
-                      key={st}
-                      disabled={statusUpdating}
-                      onClick={() => handleStatusChange(st)}
-                      className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
-                        incident.status === st
-                          ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
-                          : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
-                      }`}
-                    >
-                      {st}
-                    </button>
-                  ))}
+                  {(['OPEN', 'INVESTIGATING', 'CONTAINED', 'CLOSED'] as IncidentStatus[]).map((st) => {
+                    const isSelected =
+                      incident.status === st ||
+                      (st === 'OPEN' && incident.status === 'NEW') ||
+                      (st === 'CLOSED' && (incident.status === 'RESOLVED' || incident.status === 'FALSE_POSITIVE'));
+                    return (
+                      <button
+                        key={st}
+                        disabled={statusUpdating}
+                        onClick={() => handleStatusChange(st)}
+                        className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
+                          isSelected
+                            ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
+                            : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>

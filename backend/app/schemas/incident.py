@@ -61,7 +61,7 @@ class IncidentDetailResponse(IncidentResponse):
                     "timestamp": d.timestamp.isoformat() if hasattr(d.timestamp, 'isoformat') else str(d.timestamp),
                     "hostname": d.hostname,
                     "description": d.description,
-                    "evidence": d.evidence or [],
+                    "evidence": [f"Event #{eid}" for eid in (getattr(d, 'evidence_event_ids', []) or [])],
                     "mitre_technique_id": d.mitre_technique_id,
                     "mitre_technique_name": d.mitre_technique_name,
                     "incident_id": d.incident_id

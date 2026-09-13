@@ -116,9 +116,13 @@ async def update_incident_status(
     current_user: Optional[User] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    valid_statuses = ["NEW", "INVESTIGATING", "CONTAINED", "RESOLVED", "FALSE_POSITIVE"]
+    valid_statuses = ["NEW", "INVESTIGATING", "CONTAINED", "RESOLVED", "FALSE_POSITIVE", "OPEN", "CLOSED"]
     new_status = payload.status.upper()
-    if new_status not in valid_statuses:
+    if new_status == "OPEN":
+        new_status = "NEW"
+    elif new_status == "CLOSED":
+        new_status = "RESOLVED"
+    elif new_status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
 
     inc = db.query(Incident).filter(Incident.id == id).first()

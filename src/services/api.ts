@@ -1,4 +1,4 @@
-import { DashboardStats, Incident, SecurityLog, Alert, DetectionRule, MitreTechnique, AIAnalysis } from '../types';
+import { DashboardStats, Incident, SecurityLog, Alert, DetectionRule, MitreTechnique, AIAnalysis, Agent } from '../types';
 
 const API_BASE = '/api';
 
@@ -82,5 +82,35 @@ export async function fetchRules(): Promise<DetectionRule[]> {
 export async function fetchMitreCatalog(): Promise<MitreTechnique[]> {
   const res = await fetch(`${API_BASE}/mitre`);
   if (!res.ok) throw new Error(`Failed to fetch MITRE data: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchAgents(): Promise<Agent[]> {
+  const res = await fetch(`${API_BASE}/agents`);
+  if (!res.ok) throw new Error(`Failed to fetch agents: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchAgent(agentId: string): Promise<Agent> {
+  const res = await fetch(`${API_BASE}/agents/${agentId}`);
+  if (!res.ok) throw new Error(`Failed to fetch agent ${agentId}: ${res.statusText}`);
+  return res.json();
+}
+
+export async function sendAgentHeartbeat(agentId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/agents/${agentId}/heartbeat`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`Failed to ping agent: ${res.statusText}`);
+  return res.json();
+}
+
+export async function runSimulation(scenario: string, hostname?: string, agentId?: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/simulation/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scenario, hostname, agent_id: agentId }),
+  });
+  if (!res.ok) throw new Error(`Failed to run simulation: ${res.statusText}`);
   return res.json();
 }

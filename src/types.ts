@@ -95,3 +95,18 @@ export interface DetectionRule {
   mitre_technique_id: string;
   mitre_technique_name: string;
 }
+
+export interface Agent {
+  id: number;
+  agent_id: string;
+  hostname: string;
+  operating_system: string;
+  ip_address: string;
+  agent_version: string;
+  status: 'ONLINE' | 'OFFLINE';
+  token?: string;
+  last_seen: string;
+  registered_at: string;
+  agent_metadata?: Record<string, any>;
+  event_count: number;
+}

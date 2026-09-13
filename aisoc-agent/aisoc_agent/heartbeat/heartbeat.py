@@ -54,3 +54,9 @@ class HeartbeatManager:
             logger.debug(f"Heartbeat sent successfully for agent '{self.config.agent_id}'.")
         else:
             logger.warning(f"Heartbeat warning for agent '{self.config.agent_id}': {err}")
+            # If server restarted and lost agent in-memory state, auto re-register
+            if err and ("not registered" in err.lower() or "404" in err or "unauthorized" in err.lower()):
+                logger.info("Triggering automatic agent re-registration...")
+                reg_ok, tok, reg_err = self.transport.register()
+                if reg_ok:
+                    logger.info("Agent successfully re-registered with Central SOC.")

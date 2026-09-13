@@ -7,8 +7,9 @@ import { IncidentDetailModal } from './components/IncidentDetailModal';
 import { LiveLogStream } from './components/LiveLogStream';
 import { AttackSimulator } from './components/AttackSimulator';
 import { RulesAndMitreView } from './components/RulesAndMitreView';
-import { fetchStats, fetchIncidents, fetchLogs, fetchIncidentDetail, seedSampleAttack } from './services/api';
-import { DashboardStats, Incident, SecurityLog, Alert } from './types';
+import { AgentsManager } from './components/AgentsManager';
+import { fetchStats, fetchIncidents, fetchLogs, fetchIncidentDetail, seedSampleAttack, fetchAgents } from './services/api';
+import { DashboardStats, Incident, SecurityLog, Alert, Agent } from './types';
 import { AlertOctagon, BellRing, CheckCircle, ExternalLink, Shield } from 'lucide-react';
 
 export default function App() {
@@ -16,13 +17,17 @@ export default function App() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [logs, setLogs] = useState<SecurityLog[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+  const selectedIncidentRef = useRef<Incident | null>(null);
+  selectedIncidentRef.current = selectedIncident;
   const [wsConnected, setWsConnected] = useState<boolean>(false);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ title: string; desc: string; type: 'alert' | 'success' } | null>(
     null
   );
+  const [logHostFilter, setLogHostFilter] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -30,14 +35,16 @@ export default function App() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [st, inc, lg] = await Promise.all([
+      const [st, inc, lg, ag] = await Promise.all([
         fetchStats(),
         fetchIncidents(),
-        fetchLogs(80),
+        fetchLogs(100),
+        fetchAgents().catch(() => []),
       ]);
       setStats(st);
       setIncidents(inc);
       setLogs(lg);
+      setAgents(ag);
     } catch (err) {
       console.error('Failed to load SOC dashboard telemetry:', err);
     } finally {
@@ -50,8 +57,9 @@ export default function App() {
     const interval = setInterval(() => {
       fetchStats().then(setStats).catch(() => {});
       fetchIncidents().then(setIncidents).catch(() => {});
-      fetchLogs(80).then(setLogs).catch(() => {});
-    }, 5000);
+      fetchLogs(100).then(setLogs).catch(() => {});
+      fetchAgents().then(setAgents).catch(() => {});
+    }, 4000);
     return () => clearInterval(interval);
   }, [loadData]);
 
@@ -59,90 +67,134 @@ export default function App() {
   useEffect(() => {
     let socket: WebSocket | null = null;
     let reconnectTimeout: any = null;
+    let pingInterval: any = null;
+    let isUnmounted = false;
 
     const connectWs = () => {
+      if (isUnmounted) return;
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+        return;
+      }
+
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
 
-      socket = new WebSocket(wsUrl);
-      wsRef.current = socket;
+      try {
+        socket = new WebSocket(wsUrl);
+        wsRef.current = socket;
 
-      socket.onopen = () => {
-        setWsConnected(true);
-      };
-
-      socket.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          const msgType = payload.type;
-          const data = payload.data;
-
-          if (msgType === 'NEW_LOG' || msgType === 'EVENT_INGESTED') {
-            setLogs((prev) => [
-              {
-                id: data.id,
-                timestamp: data.timestamp,
-                hostname: data.hostname,
-                event_type: data.event_type,
-                status: data.status,
-                source_ip: data.source_ip,
-                username: data.username,
-                raw_message: data.raw_message || `${data.event_type} on ${data.hostname} (${data.status})`,
-              },
-              ...prev.filter((l) => l.id !== data.id).slice(0, 100),
-            ]);
-            fetchStats().then(setStats).catch(() => {});
-          } else if (msgType === 'NEW_ALERT' || msgType === 'DETECTION_TRIGGERED') {
-            setToastMessage({
-              title: `Security Alert: ${data.rule_name || data.title}`,
-              desc: `${data.description || data.title} on ${data.hostname}`,
-              type: 'alert',
-            });
-            fetchStats().then(setStats).catch(() => {});
-            fetchIncidents().then(setIncidents).catch(() => {});
-          } else if (msgType === 'INCIDENT_UPDATED') {
-            fetchIncidents().then(setIncidents).catch(() => {});
-            fetchStats().then(setStats).catch(() => {});
-            if (selectedIncident && (selectedIncident.id === data.id || selectedIncident.id === data.incident_id)) {
-              const targetId = data.id || data.incident_id;
-              fetchIncidentDetail(targetId).then(setSelectedIncident).catch(() => {});
-            }
-          } else if (msgType === 'AI_ANALYSIS_COMPLETED') {
-            fetchIncidents().then(setIncidents).catch(() => {});
-            if (selectedIncident && selectedIncident.id === data.incident_id) {
-              fetchIncidentDetail(data.incident_id).then(setSelectedIncident).catch(() => {});
-            }
-          } else if (
-            msgType === 'SEED_COMPLETED' ||
-            msgType === 'SIMULATION_COMPLETED' ||
-            msgType === 'DATABASE_RESET' ||
-            msgType === 'AGENT_REGISTERED' ||
-            msgType === 'AGENT_HEARTBEAT'
-          ) {
-            loadData();
+        socket.onopen = () => {
+          if (isUnmounted) {
+            socket?.close();
+            return;
           }
-        } catch (e) {
-          // non-json ping/pong
+          setWsConnected(true);
+
+          // Start 15s keep-alive heartbeat to prevent proxy timeout
+          if (pingInterval) clearInterval(pingInterval);
+          pingInterval = setInterval(() => {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+              socket.send('ping');
+            }
+          }, 15000);
+        };
+
+        socket.onmessage = (event) => {
+          try {
+            if (event.data === 'pong') return;
+            const payload = JSON.parse(event.data);
+            const msgType = payload.type;
+            const data = payload.data;
+
+            if (msgType === 'NEW_LOG' || msgType === 'EVENT_INGESTED') {
+              setLogs((prev) => [
+                {
+                  id: data.id,
+                  timestamp: data.timestamp,
+                  hostname: data.hostname,
+                  event_type: data.event_type,
+                  action: data.action,
+                  process: data.process,
+                  command: data.command,
+                  status: data.status,
+                  source_ip: data.source_ip,
+                  username: data.username,
+                  raw_message: data.raw_message || `${data.event_type} on ${data.hostname} (${data.status})`,
+                },
+                ...prev.filter((l) => l.id !== data.id).slice(0, 150),
+              ]);
+              fetchStats().then(setStats).catch(() => {});
+              fetchAgents().then(setAgents).catch(() => {});
+            } else if (msgType === 'NEW_ALERT' || msgType === 'DETECTION_TRIGGERED') {
+              setToastMessage({
+                title: `Security Alert: ${data.rule_name || data.title}`,
+                desc: `${data.description || data.title} on ${data.hostname}`,
+                type: 'alert',
+              });
+              fetchStats().then(setStats).catch(() => {});
+              fetchIncidents().then(setIncidents).catch(() => {});
+            } else if (msgType === 'INCIDENT_UPDATED') {
+              fetchIncidents().then(setIncidents).catch(() => {});
+              fetchStats().then(setStats).catch(() => {});
+              if (
+                selectedIncidentRef.current &&
+                (selectedIncidentRef.current.id === data.id || selectedIncidentRef.current.id === data.incident_id)
+              ) {
+                const targetId = data.id || data.incident_id;
+                fetchIncidentDetail(targetId).then(setSelectedIncident).catch(() => {});
+              }
+            } else if (msgType === 'AI_ANALYSIS_COMPLETED') {
+              fetchIncidents().then(setIncidents).catch(() => {});
+              if (selectedIncidentRef.current && selectedIncidentRef.current.id === data.incident_id) {
+                fetchIncidentDetail(data.incident_id).then(setSelectedIncident).catch(() => {});
+              }
+            } else if (
+              msgType === 'SEED_COMPLETED' ||
+              msgType === 'SIMULATION_COMPLETED' ||
+              msgType === 'DATABASE_RESET' ||
+              msgType === 'AGENT_REGISTERED' ||
+              msgType === 'AGENT_HEARTBEAT' ||
+              msgType === 'STATS_UPDATED'
+            ) {
+              loadData();
+            }
+          } catch (e) {
+            // non-json ping/pong
+          }
+        };
+
+        socket.onclose = () => {
+          setWsConnected(false);
+          if (pingInterval) clearInterval(pingInterval);
+          if (!isUnmounted) {
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            reconnectTimeout = setTimeout(connectWs, 2000);
+          }
+        };
+
+        socket.onerror = () => {
+          setWsConnected(false);
+        };
+      } catch (err) {
+        setWsConnected(false);
+        if (!isUnmounted) {
+          if (reconnectTimeout) clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(connectWs, 2000);
         }
-      };
-
-      socket.onclose = () => {
-        setWsConnected(false);
-        reconnectTimeout = setTimeout(connectWs, 3000);
-      };
-
-      socket.onerror = () => {
-        setWsConnected(false);
-      };
+      }
     };
 
     connectWs();
 
     return () => {
+      isUnmounted = true;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (socket) socket.close();
+      if (pingInterval) clearInterval(pingInterval);
+      if (socket) {
+        socket.close();
+      }
     };
-  }, [loadData, selectedIncident]);
+  }, [loadData]);
 
   // Toast Auto-Dismiss
   useEffect(() => {
@@ -185,15 +237,27 @@ export default function App() {
     fetchStats().then(setStats).catch(() => {});
   };
 
+  const handleFilterAgentLogs = (hostname: string) => {
+    setLogHostFilter(hostname);
+    setActiveTab('logs');
+  };
+
+  const onlineAgentCount = agents.filter((a) => a.status === 'ONLINE').length;
+  const filteredLogs = logHostFilter ? logs.filter((l) => l.hostname === logHostFilter) : logs;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
       {/* Top Navigation */}
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={(tab) => {
+          if (tab !== 'logs') setLogHostFilter(null);
+          setActiveTab(tab);
+        }}
         wsConnected={wsConnected}
         onQuickSimulate={handleQuickSimulate}
         isSimulating={isSimulating}
+        onlineAgentCount={onlineAgentCount}
       />
 
       {/* Main App Container */}
@@ -260,7 +324,17 @@ export default function App() {
           </div>
         )}
 
-        {/* View 2: Incidents & Deep Triage */}
+        {/* View 2: Agents & Endpoints Management */}
+        {activeTab === 'agents' && (
+          <AgentsManager
+            agents={agents}
+            onRefresh={loadData}
+            loading={loading}
+            onFilterAgentLogs={handleFilterAgentLogs}
+          />
+        )}
+
+        {/* View 3: Incidents & Deep Triage */}
         {activeTab === 'incidents' && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -280,17 +354,32 @@ export default function App() {
           </div>
         )}
 
-        {/* View 3: Live Telemetry Stream */}
+        {/* View 4: Live Telemetry Stream */}
         {activeTab === 'logs' && (
-          <LiveLogStream logs={logs} onRefresh={loadData} loading={loading} />
+          <div className="space-y-3">
+            {logHostFilter && (
+              <div className="p-3 bg-cyan-950/40 border border-cyan-800/60 rounded-xl flex items-center justify-between text-xs text-cyan-300">
+                <span>
+                  Filtering telemetry events for host: <strong className="font-mono text-white">{logHostFilter}</strong>
+                </span>
+                <button
+                  onClick={() => setLogHostFilter(null)}
+                  className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium"
+                >
+                  Clear Filter
+                </button>
+              </div>
+            )}
+            <LiveLogStream logs={filteredLogs} onRefresh={loadData} loading={loading} />
+          </div>
         )}
 
-        {/* View 4: Attack Simulator */}
+        {/* View 5: Attack Simulator */}
         {activeTab === 'simulator' && (
           <AttackSimulator onSimulationCompleted={loadData} />
         )}
 
-        {/* View 5: MITRE & Detection Rules Catalog */}
+        {/* View 6: MITRE & Detection Rules Catalog */}
         {activeTab === 'rules' && <RulesAndMitreView />}
       </main>
 
@@ -307,7 +396,7 @@ export default function App() {
       <footer className="border-t border-slate-900 bg-slate-950 py-4 text-center text-xs text-slate-500 font-mono">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>AI-SOC &bull; Automated Security Incident Detection, Correlation, and Analysis Framework</span>
-          <span className="text-slate-600">Pure Read-Only AI Security Model &bull; Modular Monolith Architecture</span>
+          <span className="text-slate-600">Pure Read-Only AI Security Model &bull; Real-Time Telemetry Bus</span>
         </div>
       </footer>
     </div>

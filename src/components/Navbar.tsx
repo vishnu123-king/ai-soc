@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Radio, Terminal, AlertTriangle, Zap, FileText, BookOpen, Layers } from 'lucide-react';
+import { Shield, Radio, Terminal, AlertTriangle, Zap, FileText, BookOpen, Layers, Server } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: string;
@@ -7,6 +7,7 @@ interface NavbarProps {
   wsConnected: boolean;
   onQuickSimulate: () => void;
   isSimulating: boolean;
+  onlineAgentCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -15,9 +16,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   wsConnected,
   onQuickSimulate,
   isSimulating,
+  onlineAgentCount = 0,
 }) => {
   const tabs = [
     { id: 'dashboard', label: 'SOC Dashboard', icon: Layers },
+    { id: 'agents', label: 'Endpoints & Agents', icon: Server, badge: onlineAgentCount > 0 ? `${onlineAgentCount} online` : undefined },
     { id: 'incidents', label: 'Incidents & Triage', icon: AlertTriangle },
     { id: 'logs', label: 'Live Telemetry Stream', icon: Terminal },
     { id: 'simulator', label: 'Attack Simulator', icon: Zap },
@@ -63,7 +66,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }`}
                 >
                   <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
-                  {tab.label}
+                  <span>{tab.label}</span>
+                  {tab.badge && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/80 text-[10px] font-mono">
+                      {tab.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}

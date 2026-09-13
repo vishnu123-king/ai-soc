@@ -7,12 +7,12 @@
 # Central AI-SOC Platform URL (HTTPS in production, HTTP for local testing)
 CENTRAL_SOC_URL=https://soc.example.internal
 
-# Unique identifier for this host (defaults to system hostname if blank)
-AGENT_ID=
+# Unique identifier for this host (uncomment to override; defaults to system hostname)
+# AGENT_ID=kali-workstation
 
 # Authentication Bearer Token (auto-populated by 'aisoc-agent register')
 # Can also be saved separately in /var/lib/aisoc/token (mode 0600)
-AGENT_TOKEN=
+# AGENT_TOKEN=
 
 # Agent Version
 AGENT_VERSION=1.0.0

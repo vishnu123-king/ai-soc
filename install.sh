@@ -116,18 +116,20 @@ else
 fi
 
 # Check for GEMINI_API_KEY
-if grep -q "^GEMINI_API_KEY=$" .env 2>/dev/null || grep -q "^GEMINI_API_KEY=\s*$" .env 2>/dev/null; then
-    if [[ -n "${GEMINI_API_KEY:-}" ]]; then
-        echo -e "[*] Injecting GEMINI_API_KEY from environment into .env..."
+if [[ -n "${GEMINI_API_KEY:-}" ]]; then
+    echo -e "[*] Injecting GEMINI_API_KEY from environment into .env..."
+    if grep -q "^GEMINI_API_KEY=" .env; then
         sed -i "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=${GEMINI_API_KEY}|g" .env
-        echo -e "${GREEN}[✓] GEMINI_API_KEY successfully configured in .env${NC}"
     else
-        echo -e "${YELLOW}[!] GEMINI_API_KEY is currently empty in .env.${NC}"
-        echo -e "    The system will use the deterministic rule-augmented analysis engine until you set it."
-        echo -e "    To add it anytime: edit .env or export GEMINI_API_KEY=... and restart aisoc.${NC}"
+        echo "GEMINI_API_KEY=${GEMINI_API_KEY}" >> .env
     fi
+    echo -e "${GREEN}[✓] GEMINI_API_KEY successfully configured in .env${NC}"
+elif grep -q "^GEMINI_API_KEY=$" .env 2>/dev/null || grep -q "^GEMINI_API_KEY=\s*$" .env 2>/dev/null; then
+    echo -e "${YELLOW}[!] GEMINI_API_KEY is currently empty in .env.${NC}"
+    echo -e "    The system will use the deterministic rule-augmented analysis engine until you set it."
+    echo -e "    To add it anytime: edit .env or export GEMINI_API_KEY=... and restart aisoc.${NC}"
 else
-    echo -e "${GREEN}[✓] GEMINI_API_KEY already configured in .env${NC}"
+    echo -e "${GREEN}[✓] GEMINI_API_KEY already present in .env${NC}"
 fi
 
 # ------------------------------------------------------------------------------
@@ -232,6 +234,13 @@ if [[ -d "${ROOT_DIR}/aisoc-agent" ]]; then
 
     # Ensure CLI symlinks are set up in both /usr/local/bin and /usr/bin for sudo secure_path
     $SUDO ln -sf /usr/local/bin/aisoc-agent /usr/bin/aisoc-agent
+
+    # Ensure /etc/aisoc/agent.conf points to local SOC URL and has clean AGENT_ID
+    if [[ -f /etc/aisoc/agent.conf ]]; then
+        $SUDO sed -i "s|CENTRAL_SOC_URL=https://soc.example.internal|CENTRAL_SOC_URL=http://localhost:3000|g" /etc/aisoc/agent.conf
+        $SUDO sed -i "s|^AGENT_ID=$|# AGENT_ID=|g" /etc/aisoc/agent.conf
+        $SUDO sed -i "s|^AGENT_ID=\s*$|# AGENT_ID=|g" /etc/aisoc/agent.conf
+    fi
 
     echo -e "[*] Enrolling endpoint agent with Central SOC..."
     # Give server another brief moment if needed

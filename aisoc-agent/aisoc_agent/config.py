@@ -26,10 +26,11 @@ class AgentConfig:
         ).rstrip("/")
 
         # Agent Identity
-        self.agent_id = self._get_opt(
-            "AGENT_ID",
-            default=self._get_default_agent_id()
-        )
+        agent_id_opt = self._get_opt("AGENT_ID", default="")
+        if not agent_id_opt or len(agent_id_opt.strip()) < 3:
+            self.agent_id = self._get_default_agent_id()
+        else:
+            self.agent_id = agent_id_opt.strip()
         self.agent_version = self._get_opt("AGENT_VERSION", default="1.0.0")
         self.enrollment_key = self._get_opt("AGENT_ENROLLMENT_KEY", default=None)
 
@@ -86,10 +87,10 @@ class AgentConfig:
 
     def _get_opt(self, key: str, default: Any = None) -> Any:
         # Environment variables take precedence over config file
-        if key in os.environ:
-            return os.environ[key]
-        if key in self._raw_config:
-            return self._raw_config[key]
+        if key in os.environ and os.environ[key].strip() != "":
+            return os.environ[key].strip()
+        if key in self._raw_config and self._raw_config[key].strip() != "":
+            return self._raw_config[key].strip()
         return default
 
     def _get_default_agent_id(self) -> str:

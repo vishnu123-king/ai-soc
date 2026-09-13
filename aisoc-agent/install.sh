@@ -80,7 +80,13 @@ ln -sf /usr/local/bin/aisoc-agent /usr/bin/aisoc-agent
 if [[ ! -f /etc/aisoc/agent.conf ]]; then
     echo -e "${BLUE}[*] Generating /etc/aisoc/agent.conf...${NC}"
     cp "$(dirname "$0")/config/agent.conf.example" /etc/aisoc/agent.conf
+    sed -i "s|CENTRAL_SOC_URL=https://soc.example.internal|CENTRAL_SOC_URL=http://localhost:3000|g" /etc/aisoc/agent.conf
+    sed -i "s|^AGENT_ID=.*|# AGENT_ID=|g" /etc/aisoc/agent.conf
     chmod 600 /etc/aisoc/agent.conf
+else
+    # Update existing config if it still has the example placeholder
+    sed -i "s|CENTRAL_SOC_URL=https://soc.example.internal|CENTRAL_SOC_URL=http://localhost:3000|g" /etc/aisoc/agent.conf
+    sed -i "s|^AGENT_ID=$|# AGENT_ID=|g" /etc/aisoc/agent.conf
 fi
 
 # 8. Install Systemd Service
